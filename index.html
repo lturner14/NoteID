@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Guinness World Record Attempt</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+    #noteDisplay { font-size: 48px; margin-top: 30px; }
+    #noteListDisplay { margin: 20px auto; width: 80%; font-size: 18px; white-space: pre-wrap; text-align: left; }
+    button { font-size: 20px; margin: 10px; padding: 10px 20px; }
+  </style>
+</head>
+<body>
+
+  <h1>Note Identification World Record Attempt</h1>
+  <button onclick="generateNotes()">Generate Random Note List</button>
+  <button onclick="showNoteList()">Show Note List</button>
+  <button onclick="startAttempt()">Start Attempt</button>
+
+  <div id="noteListDisplay"></div>
+  <div id="noteDisplay"></div>
+  <div id="timerDisplay"></div>
+
+  <script>
+    const ENHARMONIC_MAP = {
+      'A#': 'Bb', 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab'
+    };
+
+    const NOTES = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+    const validNotes = [];
+
+    // Generate all notes from A0 to C8
+    for (let octave = 0; octave <= 8; octave++) {
+      for (let note of NOTES) {
+        const fullNote = note + octave;
+        if (
+          (octave === 0 && (note === 'A' || note === 'A#' || note === 'B')) ||
+          (octave >= 1 && octave <= 7) ||
+          (octave === 8 && note === 'C')
+        ) {
+          let displayNote = fullNote;
+          if (ENHARMONIC_MAP[note]) {
+            displayNote += " / " + ENHARMONIC_MAP[note] + octave;
+          }
+          validNotes.push({ key: fullNote, label: displayNote });
+        }
+      }
+    }
+
+    let generatedNotes = [];
+    let currentNoteIndex = 0;
+    let startTime;
+    let timerInterval;
+    let notePlayedCount = 0;
+    let acceptingInput = false;
+    let currentAudio = null;
+
+    function generateNotes() {
+      generatedNotes = [];
+      for (let i = 0; i < 80; i++) {
+        const rand = validNotes[Math.floor(Math.random() * validNotes.length)];
+        generatedNotes.push(rand);
+      }
+      document.getElementById("noteListDisplay").innerText =
+        "Note list generated. Click 'Show Note List' to view.";
+    }
+
+    function showNoteList() {
+      if (generatedNotes.length === 0) {
+        document.getElementById("noteListDisplay").innerText =
+          "No notes generated yet. Click 'Generate Random Note List' first.";
+      } else {
+        document.getElementById("noteListDisplay").innerText =
+          generatedNotes.map(n => n.label).join(', ');
+      }
+    }
+
+    function startAttempt() {
+      if (generatedNotes.length !== 80) {
+        alert("Please generate a note list first.");
+        return;
+      }
+
+      document.getElementById("noteDisplay").innerText = "Starting in 5...";
+      document.getElementById("noteListDisplay").innerText = "";
+      document.getElementById("timerDisplay").innerText = "";
+      let countdown = 5;
+
+      const countdownInterval = setInterval(() => {
+        countdown--;
+        document.getElementById("noteDisplay").innerText =
+          countdown > 0 ? `Starting in ${countdown}...` : "Go!";
+        if (countdown === 0) {
+          clearInterval(countdownInterval);
+          playBeep("start");
+          setTimeout(beginNoteCycle, 1000);
+        }
+      }, 1000);
+    }
+
+    function beginNoteCycle() {
+      startTime = Date.now();
+      notePlayedCount = 0;
+      currentNoteIndex = 0;
+      document.getElementById("timerDisplay").innerText = "60 seconds left";
+
+      timerInterval = setInterval(() => {
+        const timeLeft = 60 - Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById("timerDisplay").innerText = `${timeLeft} seconds left`;
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          endAttempt();
+        }
+      }, 200);
+
+      showNextNote();
+    }
+
+    function showNextNote() {
+      if (currentNoteIndex >= generatedNotes.length) return;
+
+      const note = generatedNotes[currentNoteIndex];
+      document.getElementById("noteDisplay").innerText = note.label;
+      playNote(note.key);
+      acceptingInput = true;
+    }
+
+    function playNote(note) {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      }
+      const sanitizedNote = note.replace('#', '-sharp');
+      currentAudio = new Audio(`notes/${sanitizedNote}.mp3`);
+      currentAudio.play();
+    }
+
+    function playBeep(type) {
+      const beep = new Audio(type === "start" ? "start-sound.mp3" : "end-sound.mp3");
+      beep.play();
+    }
+
+    function endAttempt() {
+      playBeep("end");
+      acceptingInput = false;
+      document.getElementById("noteDisplay").innerText = `Time's up! Notes played: ${notePlayedCount}`;
+      document.getElementById("timerDisplay").innerText = "";
+      setTimeout(() => {
+        document.getElementById("noteDisplay").innerText = "Return to Home";
+      }, 10000);
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (acceptingInput === true) {
+        if (e.code === "Space") {
+          notePlayedCount++;
+          advanceNote();
+        } else if (e.code === "Enter") {
+          advanceNote();
+        }
+      } else if (acceptingInput === "end" && (e.code === "Space" || e.code === "Enter")) {
+        document.getElementById("noteDisplay").innerText = "";
+        document.getElementById("noteListDisplay").innerText = "";
+        document.getElementById("timerDisplay").innerText = "";
+        notePlayedCount = 0;
+        currentNoteIndex = 0;
+        acceptingInput = false;
+      }
+    });
+
+    function advanceNote() {
+      currentNoteIndex++;
+      if (currentNoteIndex < generatedNotes.length && (Date.now() - startTime) < 60000) {
+        acceptingInput = false;
+        showNextNote();
+      } else {
+        clearInterval(timerInterval);
+        endAttempt();
+      }
+    }
+
+  </script>
+</body>
+</html>
